@@ -1,0 +1,2 @@
+﻿station_id,name,ph,do_mg_l,ec_us_cm,salinity_ppt,temperature_c,observed_at,source
+DEMO-Q001,จุดตรวจคุณภาพน้ำตัวอย่าง,7.1,5.8,435,0.2,28.3,2026-11-18T14:00:00+07:00,demo

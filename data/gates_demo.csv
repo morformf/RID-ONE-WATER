@@ -1,0 +1,2 @@
+﻿station_id,name,upstream_m,downstream_m,gate_open_m,discharge_cms,status,source
+DEMO-G001,ประตูระบายน้ำตัวอย่าง,2.35,1.82,1.25,102.5,สาธิต,demo

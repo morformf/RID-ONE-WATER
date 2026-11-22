@@ -1,0 +1,7 @@
+﻿station_id,station_name,station_type,latitude,longitude,basin,province,source
+DEMO-T001,สถานีตัวอย่างแม่น้ำน่าน,telemetry,17.0,100.1,น่าน,พิษณุโลก,demo
+DEMO-T002,สถานีตัวอย่างแม่น้ำปิง,telemetry,18.5,98.9,ปิง,เชียงใหม่,demo
+DEMO-T003,สถานีตัวอย่างแม่น้ำเจ้าพระยา,telemetry,14.4,100.5,เจ้าพระยา,พระนครศรีอยุธยา,demo
+DEMO-R001,อ่างเก็บน้ำตัวอย่าง,reservoir,17.7,100.0,น่าน,อุตรดิตถ์,demo
+DEMO-G001,ประตูระบายน้ำตัวอย่าง,gate,14.1,100.6,เจ้าพระยา,ปทุมธานี,demo
+DEMO-Q001,จุดตรวจคุณภาพน้ำตัวอย่าง,water_quality,13.9,100.5,เจ้าพระยา,นนทบุรี,demo
