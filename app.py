@@ -11,22 +11,56 @@ import pydeck as pdk
 from data_utils import (STATION_COLUMNS,OBS_COLUMNS,PARAMS,load_table,validate_stations,
                         validate_observations,classify_status,make_alerts,excel_bytes)
 from connectors import FEEDS,fetch_reservoir
+from rid_live import RID_FEEDS,fetch_public_rid
 from extras import rainfall_summary, validate_release_plan, simulate_release, season_for_month, safe_comments_table
 import uuid
 from datetime import datetime, timezone
 
 BASE=Path(__file__).parent
-st.set_page_config(page_title='RID ONE WATER | MVP 1.0',page_icon='🌊',layout='wide',initial_sidebar_state='expanded')
-st.markdown('''<style>
-.block-container{padding-top:1.2rem;} .stMetric{background:#edf5fb;border-radius:12px;padding:12px;}
-[data-testid="stSidebar"]{background:#e8f2fa;} h1,h2,h3{color:#123b60;}
-</style>''',unsafe_allow_html=True)
+st.set_page_config(page_title='RID ONE WATER | แพลตฟอร์มข้อมูลน้ำ',page_icon='🌊',layout='wide',initial_sidebar_state='collapsed')
+st.markdown("""<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap');
+html,body,[class*="css"],div[data-testid="stApp"],button,input {font-family:'Noto Sans Thai',sans-serif;}
+.stApp{background:#f2f8ff;color:#17395d;}
+.block-container{padding-top:.4rem;max-width:1650px;padding-bottom:3rem;}
+[data-testid="stHeader"]{background:transparent;height:2rem;}
+[data-testid="stSidebar"]{background:#e7f2fe;}
+.stMetric{background:#fff;border:1px solid #dae8f8;border-radius:14px;padding:15px;box-shadow:0 3px 13px rgba(28,88,145,.06);}
+[data-testid="stMetricLabel"]{font-size:14px;color:#2d5d88;}
+[data-testid="stMetricValue"]{color:#073b75;font-weight:800;}
+h1,h2,h3{color:#063c73;letter-spacing:0;}
+[data-testid="stVerticalBlockBorderWrapper"]{border-radius:16px;}
+[data-testid="stDataFrame"]{background:#fff;border-radius:13px;overflow:hidden;}
+.stButton>button[kind="primary"],.stDownloadButton>button[kind="primary"]{background:#0877dd;border-radius:12px;border:0;}
+.stTabs [data-baseweb="tab"]{background:#eaf3ff;border-radius:9px;margin-right:5px;padding:8px 15px;}
+.stTabs [aria-selected="true"]{background:#0874d2;color:white;}
+div[data-testid="stHorizontalBlock"]{align-items:stretch;}
+.hero{background:linear-gradient(105deg,#07386e 0%,#0875c4 62%,#37a4d7 100%);border-radius:16px;color:white;padding:22px 25px 18px;margin:5px 0 12px;position:relative;overflow:hidden;}
+.hero:after{content:'≋  ≋  ≋';position:absolute;right:22px;bottom:-21px;font-size:90px;opacity:.13;letter-spacing:8px;}
+.hero-title{font-size:36px;font-weight:800;line-height:1.1;color:white;}
+.hero-sub{font-size:14px;opacity:.94;margin-top:7px;}
+.hero-mark{color:#96eaff;margin-right:11px;}
+.section-band{font-size:21px;font-weight:800;color:#123d6b;background:linear-gradient(90deg,#e4f2ff,rgba(228,242,255,0));border-left:5px solid #0786dc;border-radius:9px;padding:9px 13px;margin:14px 0 10px;}
+.kpi-box{background:#fff;border:1px solid #dceafd;border-radius:15px;padding:15px 17px;box-shadow:0 2px 11px rgba(20,80,130,.06);min-height:112px;}
+.kpi-label{font-size:13px;font-weight:600;color:#35658d;}
+.kpi-value{font-size:27px;font-weight:800;color:#063f79;margin-top:4px;}
+.kpi-note{font-size:11px;color:#6686a7;}
+.citizen-box{background:linear-gradient(140deg,#edf7ff,#f8fcff);border:1px solid #cce4fb;border-radius:17px;padding:19px;margin:0 0 13px;}
+.citizen-title{font-size:21px;font-weight:800;color:#084b89;}
+.demo-note{color:#865e11;background:#fff5d8;border:1px solid #ffe1a0;border-radius:10px;padding:8px 12px;font-size:12px;margin:8px 0;}
+.footnote{padding:12px 0;color:#6985a6;font-size:12px;}
+@media(max-width:800px){.hero-title{font-size:26px}.block-container{padding-left:12px;padding-right:12px;}.kpi-value{font-size:22px}.section-band{font-size:18px}}
+</style>""",unsafe_allow_html=True)
 
 @st.cache_data(show_spinner=False)
 def demo_data():
     s=validate_stations(pd.read_csv(BASE/'data'/'stations_demo.csv'))
     o=validate_observations(pd.read_csv(BASE/'data'/'observations_demo.csv'))
     return s,o
+
+@st.cache_data(ttl=3600,show_spinner=False)
+def cached_public_rid(feed):
+    return fetch_public_rid(feed)
 
 @st.cache_data(ttl=900,show_spinner=False)
 def live_reservoir(kind):
@@ -57,49 +91,110 @@ if 'release_plan' not in st.session_state:st.session_state.release_plan=pd.read_
 if 'tickets' not in st.session_state:st.session_state.tickets=[]
 stations=st.session_state.stations; obs=st.session_state.obs
 
+PAGES=['🏠 ภาพรวมและ GIS','📡 สถานีและกราฟ','🌧️ ข้อมูลฝน','💧 เขื่อน / อ่างเก็บน้ำ','🚪 ประตูระบายน้ำ','🧪 คุณภาพน้ำ','🗺️ ผังน้ำและทิศทางการไหล','🔔 แจ้งเตือน','📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ','🛰️ ข้อมูลจริงจาก RID','🗂️ จัดการเรื่องแจ้ง (สาธิต)','📥 นำเข้าข้อมูล','📤 ส่งออกรายงาน']
+PRIMARY=PAGES[:9]
+SECONDARY=PAGES[9:]
+if 'selected_page' not in st.session_state:st.session_state.selected_page=PAGES[0]
+
+def choose_page(p):
+    st.session_state.selected_page=p
+
+st.markdown("""<div class="hero"><div class="hero-title"><span class="hero-mark">◉</span>RID ONE WATER</div>
+<div class="hero-sub">กรมชลประทาน | แพลตฟอร์มข้อมูลน้ำบูรณาการเพื่อประชาชน · Integrated Water Intelligence Platform</div></div>""",unsafe_allow_html=True)
+with st.container():
+    # Native navigation remains usable on mobile; overflow options are available in the More menu.
+    c_nav,c_more=st.columns([5.3,1.2],gap='small')
+    with c_nav:
+        current=st.session_state.selected_page
+        display=current if current in PRIMARY else None
+        selected=st.radio('เมนูเว็บไซต์',PRIMARY,index=PRIMARY.index(display) if display else None,horizontal=True,label_visibility='collapsed',key='top_primary',on_change=lambda: choose_page(st.session_state.top_primary) if st.session_state.top_primary else None)
+    with c_more:
+        extra=st.selectbox('เมนูเพิ่มเติม',['เพิ่มเติม / นำเข้าข้อมูล']+SECONDARY,index=0,key='top_secondary',label_visibility='collapsed',on_change=lambda: choose_page(st.session_state.top_secondary) if st.session_state.top_secondary in SECONDARY else None)
 with st.sidebar:
-    st.title('🌊 RID ONE WATER')
-    st.caption('Integrated Water Intelligence · MVP 1.0')
-    page=st.radio('เมนูหลัก',['🏠 ภาพรวมและ GIS','📡 สถานีและกราฟ','🌧️ ข้อมูลฝน','💧 เขื่อน / อ่างเก็บน้ำ','🚪 ประตูระบายน้ำ','🧪 คุณภาพน้ำ','🗺️ ผังน้ำและทิศทางการไหล','🔔 แจ้งเตือน','📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ','🗂️ จัดการเรื่องแจ้ง (สาธิต)','📥 นำเข้าข้อมูล','📤 ส่งออกรายงาน'],label_visibility='collapsed')
-    page=page.split(' ',1)[1]
+    st.markdown('### ⚙️ ตั้งค่า / เมนูทั้งหมด')
+    page_side=st.selectbox('ไปยังหน้า',PAGES,index=PAGES.index(st.session_state.selected_page),key='sidebar_nav')
+    if st.button('เปิดหน้าที่เลือก',use_container_width=True):
+        choose_page(page_side);st.rerun()
     st.divider()
-    st.caption('ข้อมูลตัวอย่างเป็นข้อมูลสมมติ · API ของกรมเป็นข้อมูลจากต้นทางเมื่อเชื่อมต่อสำเร็จ')
+    st.caption('ข้อมูลจำลองสำหรับสาธิต · ข้อมูลจาก API มีสถานะและแหล่งที่มาแยกต่างหาก')
     threshold_hours=st.number_input('ข้อมูลล่าช้าหากเกิน (ชั่วโมง)',min_value=1,max_value=168,value=3)
     if st.button('คืนค่าชุดข้อมูลสาธิต',use_container_width=True):
         for key in ['stations','obs','gates','quality','rule_curve','release_plan','tickets']:
             if key in st.session_state:del st.session_state[key]
         st.rerun()
+page=st.session_state.selected_page.split(' ',1)[1]
 
 statuses=classify_status(obs,stations,threshold_hours)
-st.title('🌊 RID ONE WATER')
-st.caption('One Water • One Map • One Platform | ระบบสาธิตที่รวมข้อมูลน้ำและการมีส่วนร่วมของประชาชน · ไม่ใช่ระบบเตือนภัยหรือรับแจ้งเหตุทางการ')
+st.caption('🔵 RID ONE WATER · ระบบสาธิตข้อมูลน้ำ | ไม่ใช่ระบบเตือนภัยหรือรับแจ้งเหตุทางการ')
 
 if page=='ภาพรวมและ GIS':
-    st.subheader('ภาพรวมสถานีและแผนที่ GIS')
-    a,b,c,d=st.columns(4)
-    a.metric('สถานีในทะเบียน',len(stations))
-    b.metric('ข้อมูลทันเวลา',int((statuses.status=='ปกติ').sum()))
-    c.metric('ข้อมูลล่าช้า',int((statuses.status=='ข้อมูลล่าช้า').sum()))
-    d.metric('ไม่มีข้อมูล',int((statuses.status=='ไม่มีข้อมูล').sum()))
-    provinces=['ทั้งหมด']+sorted(stations.province.dropna().unique().tolist())
-    basin=['ทั้งหมด']+sorted(stations.basin.dropna().unique().tolist())
-    x,y,z=st.columns(3)
-    p=x.selectbox('จังหวัด',provinces); bsn=y.selectbox('ลุ่มน้ำ',basin)
-    station_type=z.selectbox('ประเภทสถานี',['ทั้งหมด']+sorted(stations.station_type.unique().tolist()))
-    show=statuses.copy()
-    if p!='ทั้งหมด':show=show[show.province==p]
-    if bsn!='ทั้งหมด':show=show[show.basin==bsn]
-    if station_type!='ทั้งหมด':show=show[show.station_type==station_type]
-    if show.empty:st.info('ไม่พบสถานีตามตัวกรอง')
-    else:
-        colors={'ปกติ':[20,145,110,180],'ข้อมูลล่าช้า':[240,160,50,200],'ไม่มีข้อมูล':[130,140,150,180],'เวลาไม่ถูกต้อง':[215,60,60,190]}
-        show['color']=show.status.apply(lambda v:colors.get(v,[130,140,150,180]))
-        st.pydeck_chart(pdk.Deck(map_style='https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-            initial_view_state=pdk.ViewState(latitude=float(show.latitude.mean()),longitude=float(show.longitude.mean()),zoom=6,pitch=0),
-            layers=[pdk.Layer('ScatterplotLayer',show,get_position='[longitude, latitude]',get_fill_color='color',get_radius=7500,pickable=True,radius_min_pixels=5,radius_max_pixels=15)],
-            tooltip={'html':'<b>{station_name}</b><br/>รหัส: {station_id}<br/>สถานะ: {status}<br/>แหล่ง: {source}'}),use_container_width=True)
-        st.dataframe(show[['station_id','station_name','station_type','province','basin','status','source']],hide_index=True,use_container_width=True)
-    st.info('สีบนแผนที่บอกความใหม่ของข้อมูล ไม่ใช่ระดับความเสี่ยงน้ำท่วม; จุดที่มี source=demo เป็นสถานีตัวอย่างสมมติ')
+    st.markdown('<div class="section-band">ภาพรวมสถานการณ์น้ำทั่วประเทศ <span style="font-size:12px;color:#768da7">(ข้อมูลตัวอย่างสำหรับสาธิต)</span></div>',unsafe_allow_html=True)
+    total=len(stations)
+    timely=int((statuses.status=='ปกติ').sum())
+    delayed=int((statuses.status=='ข้อมูลล่าช้า').sum())
+    missing=int((statuses.status=='ไม่มีข้อมูล').sum())
+    last_rain=obs[obs.parameter.eq('rainfall')]
+    rain_max=float(last_rain.value.max()) if not last_rain.empty else 0
+    for col,(icon,label,value,comment) in zip(st.columns(5,gap='small'),[
+        ('🌧️','ปริมาณฝนสูงสุด',f'{rain_max:,.1f} มม.','จากข้อมูลตัวอย่าง'),
+        ('🌊','สถานีส่งข้อมูลทันเวลา',f'{timely:,} / {total:,}','ประเมินจากเวลารายงาน'),
+        ('🏞️','อ่างเก็บน้ำ','ดูเมนูอ่าง','สถานะและ Rule Curve'),
+        ('⚠️','ข้อมูลล่าช้า',f'{delayed:,} จุด','ต้องตรวจสอบ'),
+        ('📡','ไม่มีข้อมูล',f'{missing:,} จุด','ไม่มีข้อมูลตรวจวัด')]):
+        with col:
+            st.markdown(f'<div class="kpi-box"><div class="kpi-label">{icon} {label}</div><div class="kpi-value">{value}</div><div class="kpi-note">{comment}</div></div>',unsafe_allow_html=True)
+    st.write('')
+    map_col,chart_col,cit_col=st.columns([1.25,1.65,1.1],gap='medium')
+    with map_col:
+        st.markdown('#### 🗺️ แผนที่สถานีตรวจวัด')
+        selected_province=st.selectbox('จังหวัด',['ทั้งหมด']+sorted(stations.province.dropna().unique().tolist()),key='home_province')
+        filtered=statuses.copy()
+        if selected_province!='ทั้งหมด':filtered=filtered[filtered.province.eq(selected_province)]
+        if not filtered.empty:
+            colors={'ปกติ':[12,167,104,210],'ข้อมูลล่าช้า':[250,173,36,210],'ไม่มีข้อมูล':[130,145,155,190],'เวลาไม่ถูกต้อง':[221,50,63,210]}
+            filtered['color']=filtered.status.apply(lambda v:colors.get(v,[100,100,100,190]))
+            st.pydeck_chart(pdk.Deck(map_style='https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',initial_view_state=pdk.ViewState(latitude=float(filtered.latitude.mean()),longitude=float(filtered.longitude.mean()),zoom=5.7 if selected_province=='ทั้งหมด' else 8.7),layers=[pdk.Layer('ScatterplotLayer',filtered,get_position='[longitude,latitude]',get_fill_color='color',get_radius=5000,pickable=True,radius_min_pixels=6,radius_max_pixels=15)],tooltip={'html':'<b>{station_name}</b><br/>{station_id} · {status}'}),use_container_width=True,height=400)
+        st.caption('🟢 ทันเวลา  🟠 ล่าช้า  ⚪ ไม่มีข้อมูล · สีไม่ใช่เกณฑ์น้ำท่วม')
+    with chart_col:
+        st.markdown('#### 📈 สถานการณ์น้ำจากสถานีตัวอย่าง')
+        params={'ระดับน้ำ':'water_level','ปริมาณน้ำ (Q)':'discharge','ฝน':'rainfall'}
+        chosen_metric=st.radio('ค่าที่แสดง',list(params),horizontal=True,label_visibility='collapsed',key='home_metric')
+        d=obs.loc[obs.parameter.eq(params[chosen_metric or 'ระดับน้ำ'])].copy()
+        if len(d):
+            top_ids=list(d.station_id.dropna().unique())[:3]
+            d=d[d.station_id.isin(top_ids)]
+            d['เวลาไทย']=d.observed_at.dt.tz_convert('Asia/Bangkok')
+            d['สถานี']=d.station_id.map(dict(zip(stations.station_id,stations.station_name))).fillna(d.station_id)
+            fig=px.line(d,x='เวลาไทย',y='value',color='สถานี',markers=True,labels={'value':chosen_metric,'เวลาไทย':'เวลาประเทศไทย'})
+            fig.update_layout(height=400,margin=dict(l=10,r=8,t=20,b=10),legend=dict(orientation='h',y=-.3),plot_bgcolor='#ffffff',paper_bgcolor='#ffffff',font=dict(color='#14436c'))
+            fig.update_traces(line=dict(width=3))
+            st.plotly_chart(fig,use_container_width=True)
+        else:st.info('ยังไม่มีข้อมูลสำหรับกราฟนี้')
+        st.caption('เลือกข้อมูลรายชั่วโมงจริงได้เมื่อเชื่อม API TeleHydro ที่ได้รับอนุญาต')
+    with cit_col:
+        st.markdown("""<div class="citizen-box"><div class="citizen-title">📣 มีเรื่องแจ้งหรือเสนอแนะ?</div>
+        <div style="font-size:13px;color:#51718f">ร่วมเป็นส่วนหนึ่งในการดูแลทรัพยากรน้ำ</div></div>""",unsafe_allow_html=True)
+        if st.button('📸 แจ้งเหตุ / ปัญหา',use_container_width=True,type='primary',key='home_report'):
+            choose_page('📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ');st.rerun()
+        if st.button('💬 แสดงความคิดเห็น',use_container_width=True,key='home_feedback'):
+            choose_page('📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ');st.rerun()
+        st.markdown('#### 🔔 สถานะข้อมูลล่าสุด')
+        st.info(f'สถานีที่มีข้อมูลทันเวลา: **{timely}** จุด')
+        if delayed:st.warning(f'ข้อมูลล่าช้า: **{delayed}** จุด')
+        if missing:st.error(f'สถานีไม่มีข้อมูล: **{missing}** จุด')
+        st.caption('การแจ้งเหตุเป็นแบบจำลอง ไม่ส่งเรื่องถึงกรมชลประทาน')
+    st.markdown('<div class="section-band">ข้อมูลและบริการสำหรับประชาชน</div>',unsafe_allow_html=True)
+    cards=st.columns(4,gap='medium')
+    for col,(label,target,caption) in zip(cards,[('🏞️ อ่างเก็บน้ำ','💧 เขื่อน / อ่างเก็บน้ำ','Rule Curve · แผนระบาย · ฤดูฝน/แล้ง'),('🚪 ประตูระบายน้ำ','🚪 ประตูระบายน้ำ','ระดับเหนือน้ำ–ท้ายน้ำ'),('🧪 คุณภาพน้ำ','🧪 คุณภาพน้ำ','pH · DO · EC · ความเค็ม'),('🗺️ ผังน้ำ','🗺️ ผังน้ำและทิศทางการไหล','ดูทิศทางน้ำต้นน้ำ–ปลายน้ำ')]):
+        with col:
+            with st.container(border=True):
+                st.markdown('**'+label+'**')
+                st.caption(caption)
+                if st.button('ดูรายละเอียด →',key='go_'+target,use_container_width=True):
+                    choose_page(target);st.rerun()
+    with st.expander('📍 รายชื่อและสถานะสถานีตัวอย่าง'):
+        st.dataframe(statuses[['station_id','station_name','province','basin','status','source']],hide_index=True,use_container_width=True)
+    st.markdown('<div class="demo-note">ข้อมูลสถานี/ตัวเลขในหน้า Dashboard เป็นข้อมูลสาธิต ไม่ใช่สถานการณ์น้ำจริงหรือประกาศเตือนภัยอย่างเป็นทางการ</div>',unsafe_allow_html=True)
 
 elif page=='สถานีและกราฟ':
     st.subheader('ตรวจวัดระดับน้ำ ปริมาณน้ำ และฝน')
@@ -134,6 +229,31 @@ elif page=='ข้อมูลฝน':
         valid=summary.dropna(subset=['latitude','longitude'])
         if not valid.empty:st.map(valid,latitude='latitude',longitude='longitude',size=110)
         st.download_button('ดาวน์โหลดข้อมูลฝน CSV',r.to_csv(index=False).encode('utf-8-sig'),'rainfall.csv','text/csv')
+
+elif page=='ข้อมูลจริงจาก RID':
+    st.subheader('🛰️ ข้อมูลสาธารณะจากกรมชลประทาน')
+    st.info('ตรวจสอบข้อมูลต้นทางใหม่ทุก 60 นาทีเมื่อมีผู้เปิดหน้าเว็บ (หรือกดรีเฟรชเอง) ไม่ได้หมายความว่าข้อมูลอ่างเก็บน้ำมีการตรวจวัดรายชั่วโมง')
+    source=st.selectbox('เลือกชุดข้อมูลสาธารณะ',list(RID_FEEDS))
+    st.caption('แหล่งข้อมูล: '+RID_FEEDS[source])
+    if st.button('ดึงข้อมูลใหม่ทันที',key='refresh_rid_source'):
+        cached_public_rid.clear()
+    try:
+        feed_df,retrieved_at=cached_public_rid(source)
+        st.success('เชื่อมต่อและรับข้อมูลจาก API สำเร็จ')
+        st.caption('เวลาที่เว็บไซต์ดึงข้อมูล: '+retrieved_at+' | โปรดตรวจวันที่รายงานในข้อมูลต้นทางแยกต่างหาก')
+        st.metric('จำนวนรายการที่อ่านได้',len(feed_df))
+        st.dataframe(feed_df,use_container_width=True,hide_index=True)
+        st.download_button('ดาวน์โหลดข้อมูลที่ดึงได้เป็น CSV',feed_df.to_csv(index=False).encode('utf-8-sig'),file_name='rid_public_feed.csv',mime='text/csv')
+        with st.expander('ดูชื่อคอลัมน์ข้อมูลจาก API'):
+            st.write(feed_df.columns.tolist())
+    except Exception as exc:
+        st.error('ไม่สามารถโหลด API ได้ในขณะนี้: '+str(exc))
+        st.warning('ไม่มีการแสดงค่าจำลองแทนข้อมูลจริงโดยอัตโนมัติ')
+    st.divider()
+    st.subheader('📡 ข้อมูลโทรมาตรรายชั่วโมง')
+    st.warning('ยังไม่เปิดเชื่อม TeleHydro โดยตรง: ต้องยืนยัน API ที่ใช้ได้จริงและสิทธิ์เรียกข้อมูลก่อน')
+    st.markdown('ดูข้อมูลต้นทาง: [TeleHydro](https://telehydro.rid.go.th/) | [เอกสาร SWOC REST API](https://swoc-api-service.rid.go.th/api/docs/)')
+    st.caption('เมื่อได้รับ API รายชั่วโมงที่ได้รับอนุญาต จะเพิ่มรหัสสถานี เวลาอ่านค่า ระดับน้ำ อัตราการไหล และฝน โดยไม่สร้างค่าแทรกระหว่างชั่วโมง')
 
 elif page=='เขื่อน / อ่างเก็บน้ำ':
     st.subheader('ข้อมูลเขื่อนและอ่างเก็บน้ำ')
@@ -337,4 +457,4 @@ else:
     st.dataframe(data[selected].head(150),hide_index=True,use_container_width=True)
 
 st.divider()
-st.caption('RID ONE WATER Full Demo 1.1 | Prototype only · ข้อมูลสาธิตไม่ใช่ข้อมูลทางการ · API และการนำเข้าต้องเป็นไปตามสิทธิ์การใช้งาน')
+st.caption('RID ONE WATER Full Demo UI 1.3 | Prototype only · ข้อมูลสาธิตไม่ใช่ข้อมูลทางการ · API และการนำเข้าต้องเป็นไปตามสิทธิ์การใช้งาน')
