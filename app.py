@@ -185,7 +185,7 @@ if page=='ภาพรวมและ GIS':
         st.info(f'สถานีที่มีข้อมูลทันเวลา: **{timely}** จุด')
         if delayed:st.warning(f'ข้อมูลล่าช้า: **{delayed}** จุด')
         if missing:st.error(f'สถานีไม่มีข้อมูล: **{missing}** จุด')
-        st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460** (ช่องทางทางการ)')
+        st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460**')
         if st.button('☎️ ที่อยู่และช่องทางติดต่อกรม',use_container_width=True,key='home_contact'):
             choose_page('☎️ ติดต่อกรมชลประทาน');st.rerun()
     st.markdown('<div class="section-band">ข้อมูลและบริการสำหรับประชาชน</div>',unsafe_allow_html=True)
