@@ -140,7 +140,7 @@ if page=='ภาพรวมและ GIS':
     rain_max=float(last_rain.value.max()) if not last_rain.empty else 0
     for col,(icon,label,value,comment) in zip(st.columns(5,gap='small'),[
         ('🌧️','ปริมาณฝนสูงสุด',f'{rain_max:,.1f} มม.','จากข้อมูลตัวอย่าง'),
-        ('🌊','สถานีส่งข้อมูลทันเวลา',f'{timely:,} / {total:,}','ประเมินจากเวลารายงาน'),
+        ('🌊','สถานีโทรมาตร',f'{timely:,} / {total:,}','ประเมินจากเวลารายงาน'),
         ('🏞️','อ่างเก็บน้ำ','ดูเมนูอ่าง','สถานะและ Rule Curve'),
         ('⚠️','ข้อมูลล่าช้า',f'{delayed:,} จุด','ต้องตรวจสอบ'),
         ('📡','ไม่มีข้อมูล',f'{missing:,} จุด','ไม่มีข้อมูลตรวจวัด')]):
@@ -185,7 +185,6 @@ if page=='ภาพรวมและ GIS':
         st.info(f'สถานีที่มีข้อมูลทันเวลา: **{timely}** จุด')
         if delayed:st.warning(f'ข้อมูลล่าช้า: **{delayed}** จุด')
         if missing:st.error(f'สถานีไม่มีข้อมูล: **{missing}** จุด')
-        st.caption('การแจ้งเหตุเป็นแบบจำลอง ไม่ส่งเรื่องถึงกรมชลประทาน')
         st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460** (ช่องทางทางการ)')
         if st.button('☎️ ที่อยู่และช่องทางติดต่อกรม',use_container_width=True,key='home_contact'):
             choose_page('☎️ ติดต่อกรมชลประทาน');st.rerun()
