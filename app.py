@@ -549,4 +549,4 @@ st.divider()
 st.markdown('''<div style="background:#e4f1ff;border:1px solid #c8ddf5;padding:16px;border-radius:13px;color:#164575;margin-top:10px;font-size:13px">
 <strong>☎️ ติดต่อกรมชลประทาน</strong> · 811 ถนนสามเสน แขวงถนนนครไชยศรี เขตดุสิต กรุงเทพฯ 10300<br>
 โทร. 02-241-0020 ถึง 29 · <strong>สายด่วน 1460</strong> · <a href="mailto:saraban@rid.go.th">saraban@rid.go.th</a> · <a href="https://www.rid.go.th/" target="_blank">เว็บไซต์ทางการ</a></div>''',unsafe_allow_html=True)
-st.caption('RID ONE WATER Full Demo UI 1.5 | Prototype only · ข้อมูลสาธิตไม่ใช่ข้อมูลทางการ · ช่องแจ้งเหตุภายในเว็บไม่ได้ส่งถึงกรม')
+st.caption('RID ONE WATER Full Demo UI 1.5 | Prototype only · ข้อมูลตัวอย่างไม่ใช่ข้อมูลทางการ · ช่องแจ้งเหตุภายในเว็บไม่ได้ส่งถึงกรม')
