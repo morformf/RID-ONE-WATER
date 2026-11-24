@@ -12,6 +12,7 @@ from data_utils import (STATION_COLUMNS,OBS_COLUMNS,PARAMS,load_table,validate_s
                         validate_observations,classify_status,make_alerts,excel_bytes)
 from connectors import FEEDS,fetch_reservoir
 from rid_live import RID_FEEDS,fetch_public_rid
+from pump_core import PUMP_COLUMNS,PUMP_OBS_COLUMNS,validate_pump_stations,validate_pump_observations,pumping_volume_mcm
 from extras import rainfall_summary, validate_release_plan, simulate_release, season_for_month, safe_comments_table
 import uuid
 from datetime import datetime, timezone
@@ -88,10 +89,12 @@ if 'gates' not in st.session_state:st.session_state.gates=pd.read_csv(BASE/'data
 if 'quality' not in st.session_state:st.session_state.quality=pd.read_csv(BASE/'data'/'quality_demo.csv')
 if 'rule_curve' not in st.session_state:st.session_state.rule_curve=pd.read_csv(BASE/'data'/'rule_curve_demo.csv')
 if 'release_plan' not in st.session_state:st.session_state.release_plan=pd.read_csv(BASE/'data'/'release_plan_demo.csv')
+if 'pumps' not in st.session_state:st.session_state.pumps=validate_pump_stations(pd.read_csv(BASE/'data'/'pumping_stations_demo.csv'))
+if 'pump_obs' not in st.session_state:st.session_state.pump_obs=validate_pump_observations(pd.read_csv(BASE/'data'/'pumping_operations_demo.csv'),st.session_state.pumps)
 if 'tickets' not in st.session_state:st.session_state.tickets=[]
 stations=st.session_state.stations; obs=st.session_state.obs
 
-PAGES=['🏠 ภาพรวมและ GIS','📡 สถานีและกราฟ','🌧️ ข้อมูลฝน','💧 เขื่อน / อ่างเก็บน้ำ','🚪 ประตูระบายน้ำ','🧪 คุณภาพน้ำ','🗺️ ผังน้ำและทิศทางการไหล','🔔 แจ้งเตือน','📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ','🛰️ ข้อมูลจริงจาก RID','🗂️ จัดการเรื่องแจ้ง (สาธิต)','📥 นำเข้าข้อมูล','📤 ส่งออกรายงาน']
+PAGES=['🏠 ภาพรวมและ GIS','📡 สถานีและกราฟ','🌧️ ข้อมูลฝน','💧 เขื่อน / อ่างเก็บน้ำ','🚪 ประตูระบายน้ำ','🚰 สถานีสูบน้ำ','🧪 คุณภาพน้ำ','🗺️ ผังน้ำและทิศทางการไหล','🔔 แจ้งเตือน','📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ','🛰️ ข้อมูลจริงจาก RID','🗂️ จัดการเรื่องแจ้ง (สาธิต)','📥 นำเข้าข้อมูล','📤 ส่งออกรายงาน','☎️ ติดต่อกรมชลประทาน']
 PRIMARY=PAGES[:9]
 SECONDARY=PAGES[9:]
 if 'selected_page' not in st.session_state:st.session_state.selected_page=PAGES[0]
@@ -119,7 +122,7 @@ with st.sidebar:
     st.caption('ข้อมูลจำลองสำหรับสาธิต · ข้อมูลจาก API มีสถานะและแหล่งที่มาแยกต่างหาก')
     threshold_hours=st.number_input('ข้อมูลล่าช้าหากเกิน (ชั่วโมง)',min_value=1,max_value=168,value=3)
     if st.button('คืนค่าชุดข้อมูลสาธิต',use_container_width=True):
-        for key in ['stations','obs','gates','quality','rule_curve','release_plan','tickets']:
+        for key in ['stations','obs','gates','quality','rule_curve','release_plan','tickets','pumps','pump_obs']:
             if key in st.session_state:del st.session_state[key]
         st.rerun()
 page=st.session_state.selected_page.split(' ',1)[1]
@@ -183,9 +186,12 @@ if page=='ภาพรวมและ GIS':
         if delayed:st.warning(f'ข้อมูลล่าช้า: **{delayed}** จุด')
         if missing:st.error(f'สถานีไม่มีข้อมูล: **{missing}** จุด')
         st.caption('การแจ้งเหตุเป็นแบบจำลอง ไม่ส่งเรื่องถึงกรมชลประทาน')
+        st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460** (ช่องทางทางการ)')
+        if st.button('☎️ ที่อยู่และช่องทางติดต่อกรม',use_container_width=True,key='home_contact'):
+            choose_page('☎️ ติดต่อกรมชลประทาน');st.rerun()
     st.markdown('<div class="section-band">ข้อมูลและบริการสำหรับประชาชน</div>',unsafe_allow_html=True)
-    cards=st.columns(4,gap='medium')
-    for col,(label,target,caption) in zip(cards,[('🏞️ อ่างเก็บน้ำ','💧 เขื่อน / อ่างเก็บน้ำ','Rule Curve · แผนระบาย · ฤดูฝน/แล้ง'),('🚪 ประตูระบายน้ำ','🚪 ประตูระบายน้ำ','ระดับเหนือน้ำ–ท้ายน้ำ'),('🧪 คุณภาพน้ำ','🧪 คุณภาพน้ำ','pH · DO · EC · ความเค็ม'),('🗺️ ผังน้ำ','🗺️ ผังน้ำและทิศทางการไหล','ดูทิศทางน้ำต้นน้ำ–ปลายน้ำ')]):
+    cards=st.columns(5,gap='small')
+    for col,(label,target,caption) in zip(cards,[('🏞️ อ่างเก็บน้ำ','💧 เขื่อน / อ่างเก็บน้ำ','Rule Curve · แผนระบาย · ฤดูฝน/แล้ง'),('🚪 ประตูระบายน้ำ','🚪 ประตูระบายน้ำ','ระดับเหนือน้ำ–ท้ายน้ำ'),('🚰 สถานีสูบน้ำ','🚰 สถานีสูบน้ำ','ข้อมูลกำลังสูบ · เวลาเดินเครื่อง'),('🧪 คุณภาพน้ำ','🧪 คุณภาพน้ำ','pH · DO · EC · ความเค็ม'),('🗺️ ผังน้ำ','🗺️ ผังน้ำและทิศทางการไหล','ดูทิศทางน้ำต้นน้ำ–ปลายน้ำ')]):
         with col:
             with st.container(border=True):
                 st.markdown('**'+label+'**')
@@ -321,6 +327,55 @@ elif page=='ประตูระบายน้ำ':
     st.dataframe(st.session_state.gates,hide_index=True,use_container_width=True)
     st.caption('ค่าระยะยกบานและการระบายเป็นข้อมูลแสดงผลเท่านั้น ไม่ได้ส่งคำสั่งควบคุมอาคาร')
 
+elif page=='สถานีสูบน้ำ':
+    st.markdown('<div class="section-band">🚰 ข้อมูลสถานีสูบน้ำ</div>',unsafe_allow_html=True)
+    st.warning('ข้อมูลเริ่มต้นทั้งหมดเป็นข้อมูลจำลองเพื่อทดลองระบบ ไม่ใช่สถานะเครื่องสูบหรือค่าการสูบจริงของกรมชลประทาน')
+    pumps=st.session_state.pumps
+    operations=st.session_state.pump_obs
+    b1,b2,b3=st.columns(3)
+    b1.metric('สถานีสูบน้ำในชุดข้อมูล',f'{len(pumps):,} แห่ง')
+    b2.metric('เครื่องสูบที่ติดตั้ง',f'{int(pumps.total_pumps.sum()):,} เครื่อง')
+    b3.metric('กำลังสูบตามแบบรวม',f'{pumps.rated_capacity_cms.sum():,.2f} ลบ.ม./วินาที')
+    prov=st.selectbox('เลือกจังหวัด',['ทั้งหมด']+sorted(pumps.province.unique().tolist()),key='pump_province')
+    filtered=pumps if prov=='ทั้งหมด' else pumps[pumps.province==prov]
+    left,right=st.columns([1,1.6],gap='medium')
+    with left:
+        st.markdown('#### 📍 แผนที่ตำแหน่งสถานีสูบน้ำ')
+        if len(filtered):
+            st.map(filtered,latitude='latitude',longitude='longitude',size=130)
+        else:st.info('ไม่มีสถานีในพื้นที่ที่เลือก')
+        st.dataframe(filtered[['pump_id','pump_name','province','purpose','total_pumps','rated_capacity_cms','source']],hide_index=True,use_container_width=True)
+    with right:
+        options=filtered.pump_id.tolist()
+        if options:
+            selected=st.selectbox('เลือกสถานีสูบน้ำ',options,format_func=lambda x: f"{x} — {pumps.set_index('pump_id').loc[x,'pump_name']}")
+            selected_row=pumps.set_index('pump_id').loc[selected]
+            history=operations[operations.pump_id.eq(selected)].sort_values('observed_at').copy()
+            st.markdown(f"#### {selected_row['pump_name']}")
+            st.caption(f"จังหวัด{selected_row['province']} · ลุ่มน้ำ{selected_row['basin']} · วัตถุประสงค์: {selected_row['purpose']} · แหล่งข้อมูล: {selected_row['source']}")
+            if not history.empty:
+                latest=history.iloc[-1]
+                k1,k2,k3=st.columns(3)
+                k1.metric('เครื่องที่กำลังเดิน',f"{int(latest.running_pumps)} / {int(selected_row.total_pumps)} เครื่อง")
+                k2.metric('อัตราการสูบล่าสุด',f"{latest.flow_cms:,.2f} ลบ.ม./วินาที")
+                k3.metric('สถานะล่าสุด',str(latest.status))
+                st.caption('เวลาตรวจวัดล่าสุด (เวลาไทย): '+fmt_time(latest.observed_at)+' · '+str(latest.source))
+                c1,c2,c3=st.columns(3)
+                c1.metric('ระดับน้ำต้นทาง',f"{latest.upstream_m:,.2f} ม.")
+                c2.metric('ระดับน้ำปลายทาง',f"{latest.downstream_m:,.2f} ม.")
+                c3.metric('ปริมาณสูบสะสมช่วงข้อมูล',f"{pumping_volume_mcm(history):,.3f} ล้าน ลบ.ม.")
+                st.caption('ปริมาณสูบสะสมคำนวณจากอัตราการสูบระหว่างเวลาที่บันทึกต่อเนื่อง โดยไม่สมมติว่าทุกแหล่งข้อมูลมีความถี่เท่ากัน; หากมีช่วงข้อมูลขาดหาย ควรตรวจสอบก่อนใช้งานจริง')
+                hist=history.copy();hist['เวลาไทย']=hist.observed_at.dt.tz_convert('Asia/Bangkok')
+                fig=go.Figure()
+                fig.add_trace(go.Scatter(x=hist['เวลาไทย'],y=hist.flow_cms,mode='lines+markers',name='อัตราการสูบ (ลบ.ม./วินาที)'))
+                fig.add_trace(go.Scatter(x=hist['เวลาไทย'],y=hist.running_pumps,mode='lines',name='จำนวนเครื่องเดิน',yaxis='y2'))
+                fig.update_layout(height=330,xaxis_title='เวลา (ประเทศไทย)',yaxis=dict(title='อัตราการสูบ (ลบ.ม./วินาที)'),yaxis2=dict(title='เครื่อง',overlaying='y',side='right',rangemode='tozero'),legend=dict(orientation='h',y=-.3),margin=dict(l=10,r=10,t=20,b=10))
+                st.plotly_chart(fig,use_container_width=True)
+                st.dataframe(hist.sort_values('observed_at',ascending=False),hide_index=True,use_container_width=True)
+                st.download_button('ดาวน์โหลดประวัติการเดินเครื่อง CSV',history.to_csv(index=False).encode('utf-8-sig'),file_name=f'{selected}_pump_history.csv',mime='text/csv')
+            else:st.info('ยังไม่มีข้อมูลเดินเครื่องสำหรับสถานีนี้')
+    st.info('ต้องการข้อมูลรายชั่วโมงจริง: ใช้เมนูนำเข้าข้อมูล → ข้อมูลสถานีสูบน้ำ/ประวัติเดินเครื่อง โดยต้องมีสิทธิ์ใช้ข้อมูลต้นทางก่อน')
+
 elif page=='คุณภาพน้ำ':
     st.subheader('ข้อมูลคุณภาพน้ำ')
     st.warning('ตารางเริ่มต้นเป็นข้อมูลสาธิต ค่าตรวจวัดจริงต้องนำเข้าจากหน่วยงานที่อนุญาต')
@@ -375,6 +430,33 @@ elif page=='ประชาชนแจ้งเหตุ / ข้อเสน�
             else:st.warning('ไม่พบเลขอ้างอิงใน session ปัจจุบัน')
     st.caption('เหตุฉุกเฉินให้ติดต่อหน่วยงานฉุกเฉินในพื้นที่โดยตรง; ห้ามใช้แบบฟอร์มนี้แทนการแจ้งเหตุจริง')
 
+elif page=='ติดต่อกรมชลประทาน':
+    st.markdown('<div class="section-band">☎️ ติดต่อกรมชลประทาน</div>',unsafe_allow_html=True)
+    st.caption('ข้อมูลติดต่อจากเว็บไซต์ทางการกรมชลประทาน (ตรวจสอบ พฤศจิกายน 2569)')
+    c1,c2,c3=st.columns(3,gap='medium')
+    with c1:
+        with st.container(border=True):
+            st.markdown('### 📍 ที่ตั้งสำนักงาน')
+            st.write('กรมชลประทาน (สามเสน)')
+            st.write('เลขที่ 811 ถนนสามเสน แขวงถนนนครไชยศรี เขตดุสิต กรุงเทพมหานคร 10300')
+            st.link_button('🗺️ เปิดแผนที่', 'https://www.google.com/maps/search/?api=1&query=กรมชลประทาน+สามเสน',use_container_width=True)
+    with c2:
+        with st.container(border=True):
+            st.markdown('### ☎️ โทรศัพท์')
+            st.markdown('**สำนักงาน:** 02-241-0020 ถึง 29')
+            st.markdown('**สายด่วนกรมชลประทาน: 1460**')
+            st.link_button('📞 โทรสายด่วน 1460','tel:1460',use_container_width=True)
+            st.caption('หากอุปกรณ์รองรับ สามารถกดโทรออกได้โดยตรง')
+    with c3:
+        with st.container(border=True):
+            st.markdown('### ✉️ ออนไลน์')
+            st.write('อีเมลสารบรรณ: saraban@rid.go.th')
+            st.link_button('✉️ ส่งอีเมล','mailto:saraban@rid.go.th',use_container_width=True)
+            st.link_button('🌐 เว็บไซต์กรมชลประทาน','https://www.rid.go.th/',use_container_width=True)
+    st.info('สำหรับแจ้งปัญหาด้านน้ำ สามารถติดต่อสายด่วนกรมชลประทาน 1460 ได้โดยตรง')
+    st.warning('แบบฟอร์มแจ้งเหตุภายใน RID ONE WATER เป็นเพียงระบบทดลอง ยังไม่ได้ส่งเรื่องถึงกรมชลประทาน หากต้องการแจ้งเหตุจริงให้ใช้ช่องทางทางการข้างต้น')
+    st.caption('แหล่งอ้างอิง: https://www.rid.go.th/th และ https://www.rid.go.th/th/rid_news/29013')
+
 elif page=='จัดการเรื่องแจ้ง (สาธิต)':
     st.subheader('🗂️ เจ้าหน้าที่: สาธิตจัดการเรื่องแจ้ง')
     st.warning('ส่วนนี้ไม่มีระบบเข้าสู่ระบบหรือกำหนดสิทธิ์ ห้ามใช้กับข้อมูลจริงหรือเผยแพร่ข้อมูลส่วนบุคคล')
@@ -403,8 +485,8 @@ elif page=='แจ้งเตือน':
 elif page=='นำเข้าข้อมูล':
     st.subheader('นำเข้าข้อมูล CSV / Excel')
     st.info('อัปโหลดข้อมูลจะเก็บไว้เฉพาะ session ปัจจุบัน ยังไม่มีฐานข้อมูลถาวรหรือระบบบัญชีผู้ใช้')
-    category=st.selectbox('ประเภทข้อมูล',['ทะเบียนสถานี','ข้อมูลตรวจวัด','Rule Curve','แผนระบาย','ประตูระบายน้ำ','คุณภาพน้ำ'])
-    templates={'ทะเบียนสถานี':'stations_demo.csv','ข้อมูลตรวจวัด':'observations_demo.csv','Rule Curve':'rule_curve_demo.csv','แผนระบาย':'release_plan_demo.csv','ประตูระบายน้ำ':'gates_demo.csv','คุณภาพน้ำ':'quality_demo.csv'}
+    category=st.selectbox('ประเภทข้อมูล',['ทะเบียนสถานี','ข้อมูลตรวจวัด','Rule Curve','แผนระบาย','ประตูระบายน้ำ','สถานีสูบน้ำ','ประวัติเดินเครื่องสูบน้ำ','คุณภาพน้ำ'])
+    templates={'ทะเบียนสถานี':'stations_demo.csv','ข้อมูลตรวจวัด':'observations_demo.csv','Rule Curve':'rule_curve_demo.csv','แผนระบาย':'release_plan_demo.csv','ประตูระบายน้ำ':'gates_demo.csv','สถานีสูบน้ำ':'pumping_stations_demo.csv','ประวัติเดินเครื่องสูบน้ำ':'pumping_operations_demo.csv','คุณภาพน้ำ':'quality_demo.csv'}
     fn=templates[category]
     st.download_button('ดาวน์โหลดตัวอย่างรูปแบบไฟล์',data=(BASE/'data'/fn).read_bytes(),file_name=fn,mime='text/csv')
     file=st.file_uploader('อัปโหลด CSV / XLSX',type=['csv','xlsx','xls'])
@@ -432,6 +514,12 @@ elif page=='นำเข้าข้อมูล':
                 need=set(st.session_state.gates.columns)
                 if not need.issubset(frame.columns):raise ValueError('คอลัมน์ไม่ครบ: '+', '.join(sorted(need)))
                 st.session_state.gates=frame[list(st.session_state.gates.columns)]
+            elif category=='สถานีสูบน้ำ':
+                st.session_state.pumps=validate_pump_stations(frame)
+                st.session_state.pump_obs=st.session_state.pump_obs[st.session_state.pump_obs.pump_id.isin(st.session_state.pumps.pump_id)].copy()
+            elif category=='ประวัติเดินเครื่องสูบน้ำ':
+                new=validate_pump_observations(frame,st.session_state.pumps)
+                st.session_state.pump_obs=pd.concat([st.session_state.pump_obs,new],ignore_index=True).sort_values('observed_at').drop_duplicates(['pump_id','observed_at'],keep='last').reset_index(drop=True)
             else:
                 need=set(st.session_state.quality.columns)
                 if not need.issubset(frame.columns):raise ValueError('คอลัมน์ไม่ครบ: '+', '.join(sorted(need)))
@@ -443,11 +531,13 @@ elif page=='นำเข้าข้อมูล':
     if category=='ข้อมูลตรวจวัด':st.code(', '.join(OBS_COLUMNS))
     if category=='Rule Curve':st.code('date, storage, upper_rule_curve, lower_rule_curve')
     if category=='แผนระบาย':st.code('date, inflow_cms, release_cms')
+    if category=='สถานีสูบน้ำ':st.code(', '.join(PUMP_COLUMNS))
+    if category=='ประวัติเดินเครื่องสูบน้ำ':st.code(', '.join(PUMP_OBS_COLUMNS))
 
 else:
     st.subheader('ส่งออกรายงานและชุดข้อมูล')
     data={'Stations':stations,'Observations':obs,'Station_Status':statuses.drop(columns=['color','age_hours'],errors='ignore'),
-          'Water_Gates':st.session_state.gates,'Water_Quality':st.session_state.quality,'Rule_Curve':st.session_state.rule_curve,'Release_Plan':st.session_state.release_plan}
+          'Water_Gates':st.session_state.gates,'Pumping_Stations':st.session_state.pumps,'Pump_Operations':st.session_state.pump_obs,'Water_Quality':st.session_state.quality,'Rule_Curve':st.session_state.rule_curve,'Release_Plan':st.session_state.release_plan}
     if 'rid_live' in st.session_state:data['RID_Reservoir_API']=st.session_state.rid_live
     if st.session_state.tickets:data['Citizen_Demo_Tickets']=safe_comments_table(pd.DataFrame(st.session_state.tickets))
     st.caption('เอกสารส่งออกแสดงข้อมูลจากแหล่งจริง/นำเข้า/สาธิตตาม source ของแต่ละชุด ห้ามใช้ข้อมูลสาธิตประกอบการตัดสินใจปฏิบัติการ')
@@ -457,4 +547,7 @@ else:
     st.dataframe(data[selected].head(150),hide_index=True,use_container_width=True)
 
 st.divider()
-st.caption('RID ONE WATER Full Demo UI 1.3 | Prototype only · ข้อมูลสาธิตไม่ใช่ข้อมูลทางการ · API และการนำเข้าต้องเป็นไปตามสิทธิ์การใช้งาน')
+st.markdown('''<div style="background:#e4f1ff;border:1px solid #c8ddf5;padding:16px;border-radius:13px;color:#164575;margin-top:10px;font-size:13px">
+<strong>☎️ ติดต่อกรมชลประทาน</strong> · 811 ถนนสามเสน แขวงถนนนครไชยศรี เขตดุสิต กรุงเทพฯ 10300<br>
+โทร. 02-241-0020 ถึง 29 · <strong>สายด่วน 1460</strong> · <a href="mailto:saraban@rid.go.th">saraban@rid.go.th</a> · <a href="https://www.rid.go.th/" target="_blank">เว็บไซต์ทางการ</a></div>''',unsafe_allow_html=True)
+st.caption('RID ONE WATER Full Demo UI 1.5 | Prototype only · ข้อมูลสาธิตไม่ใช่ข้อมูลทางการ · ช่องแจ้งเหตุภายในเว็บไม่ได้ส่งถึงกรม')
