@@ -131,7 +131,7 @@ statuses=classify_status(obs,stations,threshold_hours)
 st.caption('🔵 RID ONE WATER · ระบบแสดงข้อมูลน้ำ')
 
 if page=='ภาพรวมและ GIS':
-    st.markdown('<div class="section-band">ภาพรวมสถานการณ์น้ำทั่วประเทศ <span style="font-size:12px;color:#768da7">(ข้อมูลตัวอย่างสำหรับสาธิต)</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="section-band">ภาพรวมสถานการณ์น้ำทั่วประเทศ <span style="font-size:12px;color:#768da7">(ข้อมูลตัวอย่าง)</span></div>',unsafe_allow_html=True)
     total=len(stations)
     timely=int((statuses.status=='ปกติ').sum())
     delayed=int((statuses.status=='ข้อมูลล่าช้า').sum())
