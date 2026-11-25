@@ -104,7 +104,7 @@ def choose_page(p):
     st.session_state.selected_page=p
 
 st.markdown("""<div class="hero"><div class="hero-title"><span class="hero-mark">◉</span>RID ONE WATER</div>
-<div class="hero-sub">กรมชลประทาน | แพลตฟอร์มข้อมูลน้ำบูรณาการเพื่อประชาชน · Integrated Water Intelligence Platform</div></div>""",unsafe_allow_html=True)
+<div class="hero-sub">กรมชลประทาน | แพลตฟอร์มบูรณาการข้อมูลน้ำเพื่อประชาชน · Integrated Water Intelligence Platform</div></div>""",unsafe_allow_html=True)
 with st.container():
     # Native navigation remains usable on mobile; overflow options are available in the More menu.
     c_nav,c_more=st.columns([5.3,1.2],gap='small')
@@ -139,7 +139,7 @@ if st.session_state.selected_page != PAGES[0]:
         st.caption('📍 หน้าปัจจุบัน: ' + page)
 
 statuses=classify_status(obs,stations,threshold_hours)
-st.caption('🔵 RID ONE WATER · ระบบสาธิตข้อมูลน้ำ | ไม่ใช่ระบบเตือนภัยหรือรับแจ้งเหตุทางการ')
+st.caption('🔵 RID ONE WATER · ระบบแสดงข้อมูลน้ำ | ไม่ใช่ระบบเตือนภัยหรือรับแจ้งเหตุทางการ')
 
 if page=='ภาพรวมและ GIS':
     st.markdown('<div class="section-band">ภาพรวมสถานการณ์น้ำทั่วประเทศ <span style="font-size:12px;color:#768da7">(ข้อมูลตัวอย่างสำหรับสาธิต)</span></div>',unsafe_allow_html=True)
