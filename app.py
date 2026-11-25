@@ -104,7 +104,7 @@ def choose_page(p):
     st.session_state.selected_page=p
 
 st.markdown("""<div class="hero"><div class="hero-title"><span class="hero-mark">◉</span>RID ONE WATER</div>
-<div class="hero-sub">กรมชลประทาน | แพลตฟอร์มข้อมูลน้ำบูรณาการเพื่อประชาชน · Integrated Water Intelligence Platform</div></div>""",unsafe_allow_html=True)
+<div class="hero-sub">กรมชลประทาน | แพลตฟอร์มบูรณาการข้อมูลน้ำเพื่อประชาชน · Integrated Water Intelligence Platform</div></div>""",unsafe_allow_html=True)
 with st.container():
     # Native navigation remains usable on mobile; overflow options are available in the More menu.
     c_nav,c_more=st.columns([5.3,1.2],gap='small')
@@ -177,7 +177,7 @@ if page=='ภาพรวมและ GIS':
         st.caption('เลือกข้อมูลรายชั่วโมงจริงได้เมื่อเชื่อม API TeleHydro ที่ได้รับอนุญาต')
     with cit_col:
         st.markdown("""<div class="citizen-box"><div class="citizen-title">📣 มีเรื่องแจ้งหรือเสนอแนะ?</div>
-        <div style="font-size:13px;color:#51718f">ร่วมเป็นส่วนหนึ่งในการดูแลทรัพยากรน้ำ</div></div>""",unsafe_allow_html=True)
+        <div style="font-size:13px;color:#51718f">ร่วมเป็นส่วนหนึ่งในการดูแลข้อมูลน้ำ</div></div>""",unsafe_allow_html=True)
         if st.button('📸 แจ้งเหตุ / ปัญหา',use_container_width=True,type='primary',key='home_report'):
             choose_page('📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ');st.rerun()
         if st.button('💬 แสดงความคิดเห็น',use_container_width=True,key='home_feedback'):
@@ -187,7 +187,7 @@ if page=='ภาพรวมและ GIS':
         if delayed:st.warning(f'ข้อมูลล่าช้า: **{delayed}** จุด')
         if missing:st.error(f'สถานีไม่มีข้อมูล: **{missing}** จุด')
         st.caption('การแจ้งเหตุเป็นแบบจำลอง ไม่ส่งเรื่องถึงกรมชลประทาน')
-        st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460** (ช่องทางทางการ)')
+        st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460**')
         if st.button('☎️ ที่อยู่และช่องทางติดต่อกรม',use_container_width=True,key='home_contact'):
             choose_page('☎️ ติดต่อกรมชลประทาน');st.rerun()
     st.markdown('<div class="section-band">ข้อมูลและบริการสำหรับประชาชน</div>',unsafe_allow_html=True)
@@ -213,7 +213,7 @@ elif page=='สถานีและกราฟ':
     with tab2:show_fig(filtered,'discharge','อัตราการไหล')
     with tab3:show_fig(filtered,'rainfall','ฝน')
     with tab4:st.dataframe(filtered.sort_values('observed_at',ascending=False),hide_index=True,use_container_width=True)
-    st.caption('กราฟเฉพาะข้อมูลที่นำเข้าหรือสาธิต ยังไม่ได้เชื่อมค่าระดับน้ำรายสถานีแบบสดจาก RID')
+    st.caption('กราฟเฉพาะข้อมูลที่นำเข้าหรือสาธิต ยังไม่ได้เชื่อมค่าระดับน้ำรายสถานีเรียลไทม์จาก RID')
 
 elif page=='ข้อมูลฝน':
     st.subheader('🌧️ ปริมาณฝนและแผนที่สถานีฝน')
@@ -261,7 +261,7 @@ elif page=='ข้อมูลจริงจาก RID':
         st.warning('ไม่มีการแสดงค่าจำลองแทนข้อมูลจริงโดยอัตโนมัติ')
     st.divider()
     st.subheader('📡 ข้อมูลโทรมาตรรายชั่วโมง')
-    st.warning('ยังไม่เปิดเชื่อม TeleHydro โดยตรง: ต้องยืนยัน API ที่ใช้ได้จริงและสิทธิ์เรียกข้อมูลก่อน')
+    st.warning('ยังไม่เปิดเชื่อมข้อมูลโทรมาตรโดยตรง: ต้องยืนยัน API ที่ใช้ได้จริงและสิทธิ์เรียกข้อมูลก่อน')
     st.markdown('ดูข้อมูลต้นทาง: [TeleHydro](https://telehydro.rid.go.th/) | [เอกสาร SWOC REST API](https://swoc-api-service.rid.go.th/api/docs/)')
     st.caption('เมื่อได้รับ API รายชั่วโมงที่ได้รับอนุญาต จะเพิ่มรหัสสถานี เวลาอ่านค่า ระดับน้ำ อัตราการไหล และฝน โดยไม่สร้างค่าแทรกระหว่างชั่วโมง')
 
@@ -333,7 +333,7 @@ elif page=='ประตูระบายน้ำ':
 
 elif page=='สถานีสูบน้ำ':
     st.markdown('<div class="section-band">🚰 ข้อมูลสถานีสูบน้ำ</div>',unsafe_allow_html=True)
-    st.warning('ข้อมูลเริ่มต้นทั้งหมดเป็นข้อมูลจำลองเพื่อทดลองระบบ ไม่ใช่สถานะเครื่องสูบหรือค่าการสูบจริงของกรมชลประทาน')
+    st.warning('ข้อมูลเริ่มต้นทั้งหมดเป็นข้อมูลจำลองเพื่อทดลองระบบ ไม่ใช่สถานะเครื่องสูบหรือค่าการสูบจริง')
     pumps=st.session_state.pumps
     operations=st.session_state.pump_obs
     b1,b2,b3=st.columns(3)
