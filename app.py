@@ -15,6 +15,7 @@ from rid_live import RID_FEEDS,fetch_public_rid
 from pump_core import PUMP_COLUMNS,PUMP_OBS_COLUMNS,validate_pump_stations,validate_pump_observations,pumping_volume_mcm
 from extras import rainfall_summary, validate_release_plan, simulate_release, season_for_month, safe_comments_table
 import uuid
+from hourly_page import render_hourly_page
 from datetime import datetime, timezone
 
 BASE=Path(__file__).parent
@@ -94,7 +95,7 @@ if 'pump_obs' not in st.session_state:st.session_state.pump_obs=validate_pump_ob
 if 'tickets' not in st.session_state:st.session_state.tickets=[]
 stations=st.session_state.stations; obs=st.session_state.obs
 
-PAGES=['🏠 ภาพรวมและ GIS','📡 สถานีและกราฟ','🌧️ ข้อมูลฝน','💧 เขื่อน / อ่างเก็บน้ำ','🚪 ประตูระบายน้ำ','🚰 สถานีสูบน้ำ','🧪 คุณภาพน้ำ','🗺️ ผังน้ำและทิศทางการไหล','🔔 แจ้งเตือน','📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ','🛰️ ข้อมูลจริงจาก RID','🗂️ จัดการเรื่องแจ้ง (สาธิต)','📥 นำเข้าข้อมูล','📤 ส่งออกรายงาน','☎️ ติดต่อกรมชลประทาน']
+PAGES=['🏠 ภาพรวมและ GIS','📡 สถานีและกราฟ','🌧️ ข้อมูลฝน','💧 เขื่อน / อ่างเก็บน้ำ','🚪 ประตูระบายน้ำ','🚰 สถานีสูบน้ำ','🧪 คุณภาพน้ำ','🗺️ ผังน้ำและทิศทางการไหล','🔔 แจ้งเตือน','📣 ประชาชนแจ้งเหตุ / ข้อเสนอแนะ','🛰️ ข้อมูลจริงจาก RID','🕐 น้ำท่ารายชั่วโมง','🗂️ จัดการเรื่องแจ้ง (สาธิต)','📥 นำเข้าข้อมูล','📤 ส่งออกรายงาน','☎️ ติดต่อกรมชลประทาน']
 PRIMARY=PAGES[:9]
 SECONDARY=PAGES[9:]
 if 'selected_page' not in st.session_state:st.session_state.selected_page=PAGES[0]
@@ -103,7 +104,7 @@ def choose_page(p):
     st.session_state.selected_page=p
 
 st.markdown("""<div class="hero"><div class="hero-title"><span class="hero-mark">◉</span>RID ONE WATER</div>
-<div class="hero-sub">กรมชลประทาน | แพลตฟอร์มบูรณาการข้อมูลน้ำเพื่อประชาชน · Integrated Water Intelligence Platform</div></div>""",unsafe_allow_html=True)
+<div class="hero-sub">กรมชลประทาน | แพลตฟอร์มข้อมูลน้ำบูรณาการเพื่อประชาชน · Integrated Water Intelligence Platform</div></div>""",unsafe_allow_html=True)
 with st.container():
     # Native navigation remains usable on mobile; overflow options are available in the More menu.
     c_nav,c_more=st.columns([5.3,1.2],gap='small')
@@ -128,10 +129,10 @@ with st.sidebar:
 page=st.session_state.selected_page.split(' ',1)[1]
 
 statuses=classify_status(obs,stations,threshold_hours)
-st.caption('🔵 RID ONE WATER · ระบบแสดงข้อมูลน้ำ')
+st.caption('🔵 RID ONE WATER · ระบบสาธิตข้อมูลน้ำ | ไม่ใช่ระบบเตือนภัยหรือรับแจ้งเหตุทางการ')
 
 if page=='ภาพรวมและ GIS':
-    st.markdown('<div class="section-band">ภาพรวมสถานการณ์น้ำทั่วประเทศ <span style="font-size:12px;color:#768da7">(ข้อมูลตัวอย่าง)</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="section-band">ภาพรวมสถานการณ์น้ำทั่วประเทศ <span style="font-size:12px;color:#768da7">(ข้อมูลตัวอย่างสำหรับสาธิต)</span></div>',unsafe_allow_html=True)
     total=len(stations)
     timely=int((statuses.status=='ปกติ').sum())
     delayed=int((statuses.status=='ข้อมูลล่าช้า').sum())
@@ -140,7 +141,7 @@ if page=='ภาพรวมและ GIS':
     rain_max=float(last_rain.value.max()) if not last_rain.empty else 0
     for col,(icon,label,value,comment) in zip(st.columns(5,gap='small'),[
         ('🌧️','ปริมาณฝนสูงสุด',f'{rain_max:,.1f} มม.','จากข้อมูลตัวอย่าง'),
-        ('🌊','สถานีโทรมาตร',f'{timely:,} / {total:,}','ประเมินจากเวลารายงาน'),
+        ('🌊','สถานีส่งข้อมูลทันเวลา',f'{timely:,} / {total:,}','ประเมินจากเวลารายงาน'),
         ('🏞️','อ่างเก็บน้ำ','ดูเมนูอ่าง','สถานะและ Rule Curve'),
         ('⚠️','ข้อมูลล่าช้า',f'{delayed:,} จุด','ต้องตรวจสอบ'),
         ('📡','ไม่มีข้อมูล',f'{missing:,} จุด','ไม่มีข้อมูลตรวจวัด')]):
@@ -185,12 +186,13 @@ if page=='ภาพรวมและ GIS':
         st.info(f'สถานีที่มีข้อมูลทันเวลา: **{timely}** จุด')
         if delayed:st.warning(f'ข้อมูลล่าช้า: **{delayed}** จุด')
         if missing:st.error(f'สถานีไม่มีข้อมูล: **{missing}** จุด')
-        st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460**')
+        st.caption('การแจ้งเหตุเป็นแบบจำลอง ไม่ส่งเรื่องถึงกรมชลประทาน')
+        st.info('📞 **แจ้งปัญหาด้านชลประทาน: สายด่วน 1460** (ช่องทางทางการ)')
         if st.button('☎️ ที่อยู่และช่องทางติดต่อกรม',use_container_width=True,key='home_contact'):
             choose_page('☎️ ติดต่อกรมชลประทาน');st.rerun()
     st.markdown('<div class="section-band">ข้อมูลและบริการสำหรับประชาชน</div>',unsafe_allow_html=True)
     cards=st.columns(5,gap='small')
-    for col,(label,target,caption) in zip(cards,[('🏞️ อ่างเก็บน้ำ','💧 เขื่อน / อ่างเก็บน้ำ','Rule Curve · แผนระบาย · ฤดูฝน/แล้ง'),('🚪 ประตูระบายน้ำ','🚪 ประตูระบายน้ำ','ระดับเหนือน้ำ–ท้ายน้ำ'),('🚰 สถานีสูบน้ำ','🚰 สถานีสูบน้ำ','ข้อมูลกำลังสูบ · เวลาเดินเครื่อง'),('🧪 คุณภาพน้ำ','🧪 คุณภาพน้ำ','pH · DO · EC · ความเค็ม'),('🗺️ ผังน้ำ','🗺️ ผังน้ำและทิศทางการไหล','ดูทิศทางน้ำต้นน้ำ–ปลายน้ำ')]):
+    for col,(label,target,caption) in zip(cards,[('🏞️ อ่างเก็บน้ำ','💧 เขื่อน / อ่างเก็บน้ำ','Rule Curve · แผนระบาย · ฤดูฝน/แล้ง'),('🚪 ประตูระบายน้ำ','🚪 ประตูระบายน้ำ','ระดับเหนือน้ำ–ท้ายน้ำ'),('🚰 สถานีสูบน้ำ','🚰 สถานีสูบน้ำ','ข้อมูลกำลังสูบ · เวลาเดินเครื่อง'),('🧪 คุณภาพน้ำ','🧪 คุณภาพน้ำ','pH · DO · EC · ความเค็ม'),('🕐 น้ำท่ารายชั่วโมง','🕐 น้ำท่ารายชั่วโมง','กราฟระดับน้ำและอัตราการไหลรายชั่วโมง')]):
         with col:
             with st.container(border=True):
                 st.markdown('**'+label+'**')
@@ -234,6 +236,9 @@ elif page=='ข้อมูลฝน':
         valid=summary.dropna(subset=['latitude','longitude'])
         if not valid.empty:st.map(valid,latitude='latitude',longitude='longitude',size=110)
         st.download_button('ดาวน์โหลดข้อมูลฝน CSV',r.to_csv(index=False).encode('utf-8-sig'),'rainfall.csv','text/csv')
+
+elif page=='น้ำท่ารายชั่วโมง':
+    render_hourly_page()
 
 elif page=='ข้อมูลจริงจาก RID':
     st.subheader('🛰️ ข้อมูลสาธารณะจากกรมชลประทาน')
@@ -549,4 +554,4 @@ st.divider()
 st.markdown('''<div style="background:#e4f1ff;border:1px solid #c8ddf5;padding:16px;border-radius:13px;color:#164575;margin-top:10px;font-size:13px">
 <strong>☎️ ติดต่อกรมชลประทาน</strong> · 811 ถนนสามเสน แขวงถนนนครไชยศรี เขตดุสิต กรุงเทพฯ 10300<br>
 โทร. 02-241-0020 ถึง 29 · <strong>สายด่วน 1460</strong> · <a href="mailto:saraban@rid.go.th">saraban@rid.go.th</a> · <a href="https://www.rid.go.th/" target="_blank">เว็บไซต์ทางการ</a></div>''',unsafe_allow_html=True)
-st.caption('RID ONE WATER Full Demo UI 1.5 | Prototype only · ข้อมูลตัวอย่างไม่ใช่ข้อมูลทางการ · ช่องแจ้งเหตุภายในเว็บไม่ได้ส่งถึงกรม')
+st.caption('RID ONE WATER Full Demo UI 1.5 | Prototype only · ข้อมูลสาธิตไม่ใช่ข้อมูลทางการ · ช่องแจ้งเหตุภายในเว็บไม่ได้ส่งถึงกรม')
